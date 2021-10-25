@@ -139,5 +139,5 @@ class PID:
             self.K_h*(x[2] - self.xs[2]) + self.us[1]
             ]
         
-        return np.maximum(np.array(u), 0)
+        return np.clip(np.array(u), [0, 0], [100, 0.2])
         

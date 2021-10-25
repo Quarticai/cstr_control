@@ -50,17 +50,68 @@ class PidAgent:
     K_h: float
 
 
+def sample_initial_state():
+    return np.maximum(np.random.normal(loc=[0.8778252, 51.34660837, 0.659], scale=[0.25, 25, 0.2]), 0)
+
+
+def get_error(agent, x0):
+    """a temporary solution to unexpected error"""
+    try:
+        _, _, _, error = get_pid_simulation_data(agent.K_cA, agent.K_h, x0=x0)
+    except:
+        error = 1000
+    return error
+
 pid_agent1 = PidAgent(100, 10)
 pid_agent2 = PidAgent(100, 0.2)
 pid_errors = [[], []]
-for _ in tqdm(range(100)):
-    x0 = np.maximum(np.random.normal(loc=[0.8778252, 51.34660837, 0.659], scale=[0.25, 25, 0.2]), 0)
+for _ in tqdm(range(1000)):
+    x0 = sample_initial_state()
     for e, agent in enumerate([pid_agent1, pid_agent2]):
-        try:
-            _, _, _, error = get_pid_simulation_data(agent.K_cA, agent.K_h, x0=x0)
-        except:
-            error = 100
-        pid_errors[e].append(error)
-print(pid_errors)
+        pid_errors[e].append(get_error(agent, x0))
+
 print("pid agent 1:", np.mean(pid_errors[0]), np.std(pid_errors[0]))
 print("pid agent 2:", np.mean(pid_errors[1]), np.std(pid_errors[1]))
+# the result may look like:
+#pid agent 1: 233.57709298483795 3236.6187354530753
+#pid agent 2: 281.42242028511794 4273.889147337291
+
+
+"""A Naive Baseline"""
+"""train a linear regression model to decide the best Ks for PID control based on initial state"""
+"""collect training data"""
+from sklearn.linear_model import LinearRegression as LR
+X = [] # initial states as features
+Y = [] # control input as target
+print("start collecting training samples...")
+for _ in tqdm(range(100)):
+    """collecting 100 X Y samples"""
+    x0 = sample_initial_state()
+    X.append(x0)
+    """some arbitrary sampling for Ks, and select the best"""
+    best_kca, best_kh, best_score = None, None, None
+    for kca in np.random.randint(10, 100, 10):
+        for kh in np.random.uniform(0, 10, 10):
+            agent = PidAgent(kca, kh)
+            error = get_error(agent, x0)
+            if best_score is None or error < best_score:
+                best_score = error
+                best_kca, best_kh = kca, kh
+    Y.append([best_kca, best_kh])
+
+mdl = LR()
+mdl.fit(np.array(X), np.array(Y))
+
+"""test model performance"""
+errors = []
+for _ in tqdm(range(1000)):
+    x0 = sample_initial_state()
+    pred = mdl.predict(x0.reshape(1, -1))[0]
+    agent = PidAgent(*pred)
+    error = get_error(agent, x0)
+    errors.append(error)
+
+print("linear regression agent mean and std:", np.mean(errors), np.std(errors))
+# the result may look like this:
+#linear regression agent mean and std: 37.43578115100742 303.8483321272899
+# so better than the two random ones!!!
