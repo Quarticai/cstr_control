@@ -43,7 +43,7 @@ def get_pid_simulation_data(K_cA, K_h, x0=np.array([0.95413317, 49.08828331,  0.
     return x, xsp, u, objective_func(x, xsp)
 
 
-"""comparing two pid control agents with 100 sampled initial states"""
+"""comparing two pid control agents with 1000 sampled initial states"""
 @dataclass
 class PidAgent:
     K_cA: float
@@ -60,7 +60,7 @@ def get_error(agent, x0):
         _, _, _, error = get_pid_simulation_data(agent.K_cA, agent.K_h, x0=x0)
     except:
         error = 1000
-    return error
+    return error if error < 1000 else 1000 # clip error
 
 pid_agent1 = PidAgent(100, 10)
 pid_agent2 = PidAgent(100, 0.2)
@@ -73,8 +73,8 @@ for _ in tqdm(range(1000)):
 print("pid agent 1:", np.mean(pid_errors[0]), np.std(pid_errors[0]))
 print("pid agent 2:", np.mean(pid_errors[1]), np.std(pid_errors[1]))
 # the result may look like:
-#pid agent 1: 233.57709298483795 3236.6187354530753
-#pid agent 2: 281.42242028511794 4273.889147337291
+#pid agent 1: 28.38316702587552 138.20721123500766
+#pid agent 2: 22.048147101429635 123.98955893515765
 
 
 """A Naive Baseline"""
@@ -113,5 +113,5 @@ for _ in tqdm(range(1000)):
 
 print("linear regression agent mean and std:", np.mean(errors), np.std(errors))
 # the result may look like this:
-#linear regression agent mean and std: 37.43578115100742 303.8483321272899
+#linear regression agent mean and std: 16.26030667876133 106.02515077559765
 # so better than the two random ones!!!
