@@ -75,9 +75,6 @@ class ReinforceAgent(torch.nn.Module):
         std = torch.maximum(torch.exp(self.log_std), torch.ones_like(self.log_std)*1e-4)
         return torch.distributions.normal.Normal(mu, std)
 
-    def _log_prob_from_distribution(self, pi, act):
-        return pi.log_prob(act).sum(axis=-1)    # Last axis sum needed for Torch Normal distribution
-
 
 """training starts here"""
 agent = ReinforceAgent()
