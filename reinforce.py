@@ -83,11 +83,14 @@ for batch in tqdm(range(100)):
     states = []
     actions = []
     rewards = []
-    """run the agent to collect data"""
+    """run the agent to collect data
+       for policy gradient, we interact the environment to collect new data for each training epoch 
+    """
     with torch.no_grad():
         for i in range(100):
             state = sample_initial_state()
             states.append(state)
+            """the action distribution given by current state"""
             pi = agent(torch.from_numpy(np.array(state, dtype='float32').reshape(1, -1)))
             action = np.clip(pi.sample().numpy().flatten(), [0, 0], [100, 0.2]) # clip actions
             actions.append(action)
@@ -100,6 +103,7 @@ for batch in tqdm(range(100)):
     """calculate log prob"""
     pi = agent(states)
     logp = pi.log_prob(actions).sum(axis=-1)    # Last axis sum needed for Torch Normal distribution
+    """gradient ascent"""
     loss = -(logp*rewards).mean()
     loss.backward()
     opt.step()

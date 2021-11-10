@@ -1,6 +1,12 @@
 from dataclasses import dataclass
 from tqdm import tqdm
+import torch
+import torch.nn.functional as F
+import torch.nn as nn
 from models import *
+from sklearn.preprocessing import StandardScaler
+
+
 
 XS = np.array([0.8778252, 51.34660837, 0.659])
 US = np.array([26.85, 0.1])
@@ -64,21 +70,6 @@ def get_error(agent, x0):
     return error if error < 1000 else 1000  # clip error
 
 
-# pid_agent1 = PidAgent(100, 10)
-# pid_agent2 = PidAgent(100, 0.2)
-# pid_errors = [[], []]
-# for _ in tqdm(range(1000)):
-#     x0 = sample_initial_state()
-#     for e, agent in enumerate([pid_agent1, pid_agent2]):
-#         pid_errors[e].append(get_error(agent, x0))
-#
-# print("pid agent 1:", np.mean(pid_errors[0]), np.std(pid_errors[0]))
-# print("pid agent 2:", np.mean(pid_errors[1]), np.std(pid_errors[1]))
-# the result may look like:
-# pid agent 1: 28.38316702587552 138.20721123500766
-# pid agent 2: 22.048147101429635 123.98955893515765
-
-
 """A Naive Baseline"""
 """train a linear regression model to decide the best Ks for PID control based on initial state"""
 """collect training data"""
@@ -102,20 +93,69 @@ for _ in tqdm(range(100)):
                 best_kca, best_kh = kca, kh
     Y.append([best_kca, best_kh])
 
-mdl = LR()
-mdl.fit(np.array(X), np.array(Y))
-print(np.array(X).shape)
+
+class NN(nn.Module):
+    def __init__(self, obs_dim=3, act_dim=2):
+        super(NN, self).__init__()
+        self.NN = nn.Sequential(
+            nn.Linear(obs_dim, 64),
+            nn.RReLU(),
+            nn.Linear(64, 16),
+            nn.RReLU(),
+            nn.Linear(16, 8),
+            nn.RReLU(),
+            nn.Linear(8, act_dim),
+        )
+
+    def predict(self, state):
+        action = self.NN(state)
+        return action
+
+
+mdl = NN()
+opt = torch.optim.Adam(mdl.parameters())
+epoch = 1000
+
+X_ori = np.array(X, dtype=np.float32)
+Y_ori = np.array(Y, dtype=np.float32)
+
+scaler_X = StandardScaler()
+scaler_Y = StandardScaler()
+
+X = scaler_X.fit_transform(X_ori)
+Y = scaler_Y.fit_transform(Y_ori)
+
+X = torch.from_numpy(X)
+Y = torch.from_numpy(Y)
+
+mdl.train()
+for _ in tqdm(range(epoch)):
+    opt.zero_grad()
+    Y_pred = mdl.predict(X)
+    loss = F.l1_loss(Y_pred, Y)
+    loss.backward()
+    opt.step()
+
+# mdl = LR()
+# mdl.fit(np.array(X), np.array(Y))
 
 """test model performance"""
+mdl.eval()
 errors = []
 for _ in tqdm(range(1000)):
-    x0 = sample_initial_state()
-    pred = mdl.predict(x0.reshape(1, -1))[0]
+    x0 = sample_initial_state().astype(np.float32)
+    x_scl = scaler_X.transform(x0.reshape(1, -1))
+    x_scl = torch.from_numpy(x_scl)
+    pred = mdl.predict(x_scl)[0]
+    pred = pred.detach().numpy()
+    pred = scaler_Y.inverse_transform(pred)
     agent = PidAgent(*pred)
-    error = get_error(agent, x0)
+    error = get_error(agent, np.array(x0))
     errors.append(error)
 
 print("linear regression agent mean and std:", np.mean(errors), np.std(errors))
 # the result may look like this:
 # linear regression agent mean and std: 16.26030667876133 106.02515077559765
 # so better than the two random ones!!!
+
+# 11.326543338052815 78.39480612201261
